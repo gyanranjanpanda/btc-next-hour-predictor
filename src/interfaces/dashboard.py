@@ -52,7 +52,7 @@ def _kpi_html(label: str, value: str, hint: str, color: str = "white") -> str:
     return (
         f'<div style="{_CARD}">'
         f'<div style="{_LABEL}">{label}</div>'
-        f'<div style="font-size:1.7rem;font-weight:800;color:{c};line-height:1.2">{value}</div>'
+        f'<div style="font-size:1.3rem;font-weight:800;color:{c};line-height:1.2;white-space:nowrap">{value}</div>'
         f'<div style="{_HINT}">{hint}</div>'
         f'</div>'
     )
@@ -212,15 +212,35 @@ def build_chart(
         template="plotly_dark",
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(13,17,23,0.95)",
-        xaxis=dict(rangeslider=dict(visible=False), gridcolor="#21262d", linecolor="#21262d"),
-        yaxis=dict(gridcolor="#21262d", linecolor="#21262d", tickprefix="$", tickformat=","),
-        height=550,
-        margin=dict(l=0, r=0, t=30, b=0),
+        xaxis=dict(
+            rangeslider=dict(visible=False),
+            gridcolor="#21262d",
+            linecolor="#21262d",
+            showspikes=True,
+            spikecolor="#F7931A",
+            spikethickness=1,
+            spikedash="dot",
+            spikemode="across",
+        ),
+        yaxis=dict(
+            gridcolor="#21262d",
+            linecolor="#21262d",
+            tickprefix="$",
+            tickformat=",",
+            showspikes=True,
+            spikecolor="#F7931A",
+            spikethickness=1,
+            spikedash="dot",
+        ),
+        height=650,
+        margin=dict(l=60, r=20, t=30, b=40),
         legend=dict(
             orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1,
             font=dict(color="#7d8590", size=11), bgcolor="rgba(0,0,0,0)",
         ),
         font=dict(family="Inter, sans-serif", color="#e6edf3"),
+        hovermode="x unified",
+        dragmode="zoom",
     )
 
     return fig
@@ -288,9 +308,9 @@ def main() -> None:
         st.markdown(_kpi_html("Prediction Width", f"${prediction.width:,.2f}", "95% confidence band"), unsafe_allow_html=True)
 
     # ── Chart ──
-    st.markdown(_section("Last 50 Hours + Forecast Ribbon"), unsafe_allow_html=True)
+    st.markdown(_section("Last 100 Hours + Forecast Ribbon"), unsafe_allow_html=True)
 
-    display_candles = candles[-50:]
+    display_candles = candles[-100:]
     candles_df = pd.DataFrame([
         {"time": c.timestamp, "open": c.open_price, "high": c.high_price, "low": c.low_price, "close": c.close_price}
         for c in display_candles
