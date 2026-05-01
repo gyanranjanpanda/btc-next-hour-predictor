@@ -29,157 +29,104 @@ st.set_page_config(
 )
 
 # ───────────────────────────── Premium CSS ──────────────────────────────
+# Note: CSS must have NO leading whitespace inside st.markdown to avoid
+# Streamlit interpreting it as a code block on Cloud.
 
-st.markdown("""
-<style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
+_CSS = """<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
+.stApp {
+    background: linear-gradient(180deg, #0a0a0f 0%, #0d1117 50%, #0a0a0f 100%);
+    font-family: 'Inter', sans-serif;
+}
+.block-container { padding-top: 2rem; }
+#MainMenu { visibility: hidden; }
+footer { visibility: hidden; }
+header { visibility: hidden; }
+.hero-title {
+    font-size: 2.8rem;
+    font-weight: 900;
+    background: linear-gradient(135deg, #F7931A 0%, #FFD93D 50%, #F7931A 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    text-align: center;
+    margin-bottom: 0.2rem;
+    letter-spacing: -1px;
+}
+.hero-subtitle {
+    text-align: center;
+    color: #6c7a89;
+    font-size: 1rem;
+    margin-bottom: 2rem;
+    font-weight: 400;
+}
+.kpi-card {
+    background: linear-gradient(145deg, #161b22 0%, #1c2333 100%);
+    border: 1px solid #21262d;
+    border-radius: 16px;
+    padding: 1.5rem;
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+    transition: transform 0.2s ease, border-color 0.2s ease;
+    border-top: 3px solid #F7931A;
+}
+.kpi-card:hover {
+    transform: translateY(-2px);
+    border-color: #F7931A44;
+}
+.kpi-label {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: #7d8590;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 0.5rem;
+}
+.kpi-value {
+    font-size: 1.8rem;
+    font-weight: 800;
+    color: #e6edf3;
+    line-height: 1.2;
+}
+.kpi-value.bitcoin { color: #F7931A; }
+.kpi-value.green { color: #3fb950; }
+.kpi-value.cyan { color: #58a6ff; }
+.kpi-value.purple { color: #bc8cff; }
+.kpi-hint {
+    font-size: 0.7rem;
+    color: #484f58;
+    margin-top: 0.3rem;
+}
+.section-header {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: #e6edf3;
+    margin: 1.5rem 0 1rem 0;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+.section-header .dot {
+    width: 8px; height: 8px;
+    background: #F7931A;
+    border-radius: 50%;
+    display: inline-block;
+}
+.footer-badge {
+    text-align: center;
+    color: #484f58;
+    font-size: 0.75rem;
+    margin-top: 2rem;
+    padding: 1rem;
+}
+.footer-badge a { color: #F7931A; text-decoration: none; }
+[data-testid="stMetricValue"] {
+    font-family: 'Inter', sans-serif;
+    font-weight: 800;
+}
+</style>"""
 
-    /* Global overrides */
-    .stApp {
-        background: linear-gradient(180deg, #0a0a0f 0%, #0d1117 50%, #0a0a0f 100%);
-        font-family: 'Inter', sans-serif;
-    }
-    .block-container { padding-top: 2rem; }
-
-    /* Hide default Streamlit elements for cleaner UI */
-    #MainMenu { visibility: hidden; }
-    footer { visibility: hidden; }
-    header { visibility: hidden; }
-
-    /* Title area */
-    .hero-title {
-        font-size: 2.8rem;
-        font-weight: 900;
-        background: linear-gradient(135deg, #F7931A 0%, #FFD93D 50%, #F7931A 100%);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        text-align: center;
-        margin-bottom: 0.2rem;
-        letter-spacing: -1px;
-    }
-    .hero-subtitle {
-        text-align: center;
-        color: #6c7a89;
-        font-size: 1rem;
-        margin-bottom: 2rem;
-        font-weight: 400;
-    }
-
-    /* KPI Cards */
-    .kpi-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-        gap: 1rem;
-        margin-bottom: 2rem;
-    }
-    .kpi-card {
-        background: linear-gradient(145deg, #161b22 0%, #1c2333 100%);
-        border: 1px solid #21262d;
-        border-radius: 16px;
-        padding: 1.5rem;
-        text-align: center;
-        position: relative;
-        overflow: hidden;
-        transition: transform 0.2s ease, border-color 0.2s ease;
-    }
-    .kpi-card:hover {
-        transform: translateY(-2px);
-        border-color: #F7931A44;
-    }
-    .kpi-card::before {
-        content: '';
-        position: absolute;
-        top: 0; left: 0; right: 0;
-        height: 3px;
-        background: linear-gradient(90deg, #F7931A, #FFD93D);
-        border-radius: 16px 16px 0 0;
-    }
-    .kpi-label {
-        font-size: 0.75rem;
-        font-weight: 600;
-        color: #7d8590;
-        text-transform: uppercase;
-        letter-spacing: 1px;
-        margin-bottom: 0.5rem;
-    }
-    .kpi-value {
-        font-size: 1.8rem;
-        font-weight: 800;
-        color: #e6edf3;
-        line-height: 1.2;
-    }
-    .kpi-value.bitcoin { color: #F7931A; }
-    .kpi-value.green { color: #3fb950; }
-    .kpi-value.cyan { color: #58a6ff; }
-    .kpi-value.purple { color: #bc8cff; }
-    .kpi-hint {
-        font-size: 0.7rem;
-        color: #484f58;
-        margin-top: 0.3rem;
-    }
-
-    /* Section headers */
-    .section-header {
-        font-size: 1.1rem;
-        font-weight: 700;
-        color: #e6edf3;
-        margin: 1.5rem 0 1rem 0;
-        display: flex;
-        align-items: center;
-        gap: 0.5rem;
-    }
-    .section-header .dot {
-        width: 8px; height: 8px;
-        background: #F7931A;
-        border-radius: 50%;
-        display: inline-block;
-    }
-
-    /* Prediction range display */
-    .range-display {
-        background: linear-gradient(145deg, #161b22 0%, #1c2333 100%);
-        border: 1px solid #21262d;
-        border-radius: 16px;
-        padding: 2rem;
-        text-align: center;
-        margin-bottom: 1.5rem;
-    }
-    .range-label {
-        font-size: 0.8rem;
-        font-weight: 600;
-        color: #7d8590;
-        text-transform: uppercase;
-        letter-spacing: 1px;
-    }
-    .range-value {
-        font-size: 1.4rem;
-        font-weight: 700;
-        color: #58a6ff;
-        margin-top: 0.5rem;
-    }
-    .range-arrow {
-        color: #F7931A;
-        font-size: 1.4rem;
-        margin: 0 0.5rem;
-    }
-
-    /* Footer badge */
-    .footer-badge {
-        text-align: center;
-        color: #484f58;
-        font-size: 0.75rem;
-        margin-top: 2rem;
-        padding: 1rem;
-    }
-    .footer-badge a { color: #F7931A; text-decoration: none; }
-
-    /* Streamlit metric overrides */
-    [data-testid="stMetricValue"] {
-        font-family: 'Inter', sans-serif;
-        font-weight: 800;
-    }
-</style>
-""", unsafe_allow_html=True)
+st.markdown(_CSS, unsafe_allow_html=True)
 
 
 # ───────────────────────────── Dependencies ─────────────────────────────
@@ -246,6 +193,18 @@ def load_backtest_metrics() -> dict[str, str]:
         }
     except Exception:
         return {"coverage": "Error", "avg_width": "Error", "winkler": "Error", "total": "Error"}
+
+
+def _kpi_card(label: str, value: str, hint: str, color_class: str = "") -> str:
+    """Returns a single KPI card as an HTML string."""
+    cls = f"kpi-value {color_class}" if color_class else "kpi-value"
+    return (
+        f'<div class="kpi-card">'
+        f'<div class="kpi-label">{label}</div>'
+        f'<div class="{cls}">{value}</div>'
+        f'<div class="kpi-hint">{hint}</div>'
+        f'</div>'
+    )
 
 
 def build_chart(
@@ -316,7 +275,7 @@ def build_chart(
         )
     )
 
-    # Add a horizontal dashed line at current price
+    # Horizontal dashed line at current price
     current_close = candles_df["close"].iloc[-1]
     fig.add_hline(
         y=current_close,
@@ -363,7 +322,7 @@ def build_chart(
 # ───────────────────────────── Main App ─────────────────────────────────
 
 def main() -> None:
-    # Header
+    # Header — no indentation inside the HTML string
     st.markdown('<div class="hero-title">₿ Bitcoin Next-Hour Predictor</div>', unsafe_allow_html=True)
     st.markdown(
         '<div class="hero-subtitle">GBM + GARCH(1,1) with Student-t innovations · 95% confidence interval · Live from Binance</div>',
@@ -380,30 +339,16 @@ def main() -> None:
         unsafe_allow_html=True,
     )
 
-    st.markdown(f"""
-    <div class="kpi-grid">
-        <div class="kpi-card">
-            <div class="kpi-label">Coverage</div>
-            <div class="kpi-value green">{metrics['coverage']}</div>
-            <div class="kpi-hint">Target ≈ 95%</div>
-        </div>
-        <div class="kpi-card">
-            <div class="kpi-label">Average Width</div>
-            <div class="kpi-value cyan">{metrics['avg_width']}</div>
-            <div class="kpi-hint">Narrower = Better</div>
-        </div>
-        <div class="kpi-card">
-            <div class="kpi-label">Mean Winkler Score</div>
-            <div class="kpi-value purple">{metrics['winkler']}</div>
-            <div class="kpi-hint">Lower = Better</div>
-        </div>
-        <div class="kpi-card">
-            <div class="kpi-label">Total Predictions</div>
-            <div class="kpi-value">{metrics['total']}</div>
-            <div class="kpi-hint">Out-of-sample bars</div>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
+    # Use native st.columns for the grid layout, custom HTML inside each column
+    bt_cols = st.columns(4)
+    with bt_cols[0]:
+        st.markdown(_kpi_card("Coverage", metrics["coverage"], "Target ≈ 95%", "green"), unsafe_allow_html=True)
+    with bt_cols[1]:
+        st.markdown(_kpi_card("Average Width", metrics["avg_width"], "Narrower = Better", "cyan"), unsafe_allow_html=True)
+    with bt_cols[2]:
+        st.markdown(_kpi_card("Mean Winkler Score", metrics["winkler"], "Lower = Better", "purple"), unsafe_allow_html=True)
+    with bt_cols[3]:
+        st.markdown(_kpi_card("Total Predictions", metrics["total"], "Out-of-sample bars"), unsafe_allow_html=True)
 
     # ── Live Prediction ──
     st.markdown(
@@ -422,36 +367,21 @@ def main() -> None:
             st.error(f"Failed to fetch data or run simulation: {exc}")
             return
 
-    # Price + Range KPIs
+    # Price + Range KPIs using native columns
     price_change = candles[-1].close_price - candles[-2].close_price
     price_change_pct = (price_change / candles[-2].close_price) * 100
-    change_color = "green" if price_change >= 0 else "color: #f85149"
     change_arrow = "▲" if price_change >= 0 else "▼"
+    change_text = f"{change_arrow} ${abs(price_change):,.2f} ({price_change_pct:+.2f}%)"
 
-    st.markdown(f"""
-    <div class="kpi-grid">
-        <div class="kpi-card">
-            <div class="kpi-label">Current BTC Price</div>
-            <div class="kpi-value bitcoin">${current_price:,.2f}</div>
-            <div class="kpi-hint" style="{change_color}">{change_arrow} ${abs(price_change):,.2f} ({price_change_pct:+.2f}%)</div>
-        </div>
-        <div class="kpi-card">
-            <div class="kpi-label">Predicted Lower Bound</div>
-            <div class="kpi-value cyan">${prediction.lower_bound:,.2f}</div>
-            <div class="kpi-hint">2.5th percentile</div>
-        </div>
-        <div class="kpi-card">
-            <div class="kpi-label">Predicted Upper Bound</div>
-            <div class="kpi-value cyan">${prediction.upper_bound:,.2f}</div>
-            <div class="kpi-hint">97.5th percentile</div>
-        </div>
-        <div class="kpi-card">
-            <div class="kpi-label">Prediction Width</div>
-            <div class="kpi-value">${prediction.width:,.2f}</div>
-            <div class="kpi-hint">95% confidence band</div>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
+    live_cols = st.columns(4)
+    with live_cols[0]:
+        st.markdown(_kpi_card("Current BTC Price", f"${current_price:,.2f}", change_text, "bitcoin"), unsafe_allow_html=True)
+    with live_cols[1]:
+        st.markdown(_kpi_card("Predicted Lower Bound", f"${prediction.lower_bound:,.2f}", "2.5th percentile", "cyan"), unsafe_allow_html=True)
+    with live_cols[2]:
+        st.markdown(_kpi_card("Predicted Upper Bound", f"${prediction.upper_bound:,.2f}", "97.5th percentile", "cyan"), unsafe_allow_html=True)
+    with live_cols[3]:
+        st.markdown(_kpi_card("Prediction Width", f"${prediction.width:,.2f}", "95% confidence band"), unsafe_allow_html=True)
 
     # ── Chart ──
     st.markdown(
@@ -481,7 +411,7 @@ def main() -> None:
         prediction.timestamp,
         past_predictions=past_preds,
     )
-    st.plotly_chart(chart, width="stretch")
+    st.plotly_chart(chart, use_container_width=True)
 
     # ── Prediction History Table (Part C) ──
     all_preds = repo.get_all()
@@ -503,7 +433,7 @@ def main() -> None:
                 for p in reversed(all_preds[-20:])
             ]
         )
-        st.dataframe(history_df, width="stretch", hide_index=True)
+        st.dataframe(history_df, use_container_width=True, hide_index=True)
 
     # Footer
     st.markdown(
