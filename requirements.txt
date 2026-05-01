@@ -1,0 +1,9 @@
+numpy>=1.26
+pandas>=2.2
+requests>=2.31
+scipy>=1.13
+arch>=7.0
+streamlit>=1.35
+plotly>=5.22
+pydantic>=2.7
+tqdm>=4.66
