@@ -83,7 +83,7 @@ st.markdown('<meta http-equiv="refresh" content="300">', unsafe_allow_html=True)
 # ───────────────────────────── Dependencies ─────────────────────────────
 
 @st.cache_resource
-def get_dependencies():
+def get_dependencies(_version: str = "v2"):
     data_provider = BinanceDataProvider()
     simulator = GBMSimulator(
         num_simulations=10_000,
