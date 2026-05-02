@@ -1,5 +1,5 @@
 """
-AlphaI × Polaris — Bitcoin Next-Hour Predictor Dashboard (Part B).
+AlphaI × Polaris — Bitcoin Next-Hour Predictor Dashboard.
 
 Run:
     streamlit run src/interfaces/dashboard.py
@@ -8,8 +8,9 @@ from __future__ import annotations
 
 import json
 import os
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
+import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
@@ -29,8 +30,6 @@ st.set_page_config(
 )
 
 # ───────────────────────────── Inline-Style CSS ─────────────────────────
-# Streamlit Cloud strips <style> blocks. We inject via st.markdown with
-# inline styles to guarantee rendering on all environments.
 
 _BG = "background:linear-gradient(145deg,#161b22 0%,#1c2333 100%)"
 _CARD = f"{_BG};border:1px solid #21262d;border-radius:16px;padding:1.2rem 1rem;text-align:center;border-top:3px solid #F7931A"
@@ -43,6 +42,7 @@ _COLORS = {
     "purple": "#bc8cff",
     "bitcoin": "#F7931A",
     "white": "#e6edf3",
+    "red": "#f85149",
 }
 
 
@@ -76,6 +76,9 @@ st.markdown("""<style>
 [data-testid="stMetricValue"] {font-family:'Inter',sans-serif;font-weight:800}
 </style>""", unsafe_allow_html=True)
 
+# Auto-refresh every 5 minutes via HTML meta tag
+st.markdown('<meta http-equiv="refresh" content="300">', unsafe_allow_html=True)
+
 
 # ───────────────────────────── Dependencies ─────────────────────────────
 
@@ -92,18 +95,19 @@ def get_dependencies():
     return data_provider, use_case, repo
 
 
-def load_backtest_metrics() -> dict[str, str]:
-    """Reads backtest_results.jsonl and recalculates metrics."""
+def load_backtest_metrics() -> tuple[dict[str, str], list[dict]]:
+    """Reads backtest_results.jsonl and returns metrics + raw rows."""
     filepath = "backtest_results.jsonl"
+    empty_metrics = {"coverage": "—", "avg_width": "—", "winkler": "—", "total": "—"}
     if not os.path.exists(filepath):
-        return {"coverage": "—", "avg_width": "—", "winkler": "—", "total": "—"}
+        return empty_metrics, []
 
     try:
         with open(filepath) as fh:
             rows = [json.loads(line) for line in fh if line.strip()]
 
         if not rows:
-            return {"coverage": "—", "avg_width": "—", "winkler": "—", "total": "—"}
+            return empty_metrics, []
 
         hits = sum(
             1
@@ -133,14 +137,15 @@ def load_backtest_metrics() -> dict[str, str]:
             sum(winkler_scores) / len(winkler_scores) if winkler_scores else 0.0
         )
 
-        return {
+        metrics = {
             "coverage": f"{coverage:.2%}",
             "avg_width": f"${avg_width:,.2f}",
             "winkler": f"{mean_winkler:,.2f}",
             "total": f"{len(rows):,}",
         }
+        return metrics, rows
     except Exception:
-        return {"coverage": "Error", "avg_width": "Error", "winkler": "Error", "total": "Error"}
+        return {"coverage": "Error", "avg_width": "Error", "winkler": "Error", "total": "Error"}, []
 
 
 def build_chart(
@@ -236,7 +241,7 @@ def build_chart(
             autorange=True,
             fixedrange=False,
         ),
-        height=650,
+        height=550,
         margin=dict(l=50, r=20, t=40, b=40),
         legend=dict(
             orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1,
@@ -245,6 +250,130 @@ def build_chart(
         font=dict(family="Inter, sans-serif", color="#e6edf3"),
         hovermode="x unified",
         dragmode="pan",
+    )
+
+    return fig
+
+
+def build_distribution_chart(
+    simulated_prices: np.ndarray,
+    lower: float,
+    upper: float,
+    current_price: float,
+) -> go.Figure:
+    """Histogram of Monte Carlo simulated prices with percentile bounds marked."""
+    fig = go.Figure()
+
+    fig.add_trace(
+        go.Histogram(
+            x=simulated_prices,
+            nbinsx=80,
+            marker_color="rgba(247,147,26,0.35)",
+            marker_line=dict(color="#F7931A", width=0.5),
+            name="Simulated Prices",
+            hovertemplate="Price: $%{x:,.0f}<br>Count: %{y}<extra></extra>",
+        )
+    )
+
+    # 2.5th percentile (lower bound)
+    fig.add_vline(
+        x=lower, line_dash="dash", line_color="#58a6ff", line_width=2,
+        annotation_text=f"2.5th: ${lower:,.0f}",
+        annotation_position="top left",
+        annotation_font=dict(color="#58a6ff", size=10),
+    )
+    # 97.5th percentile (upper bound)
+    fig.add_vline(
+        x=upper, line_dash="dash", line_color="#58a6ff", line_width=2,
+        annotation_text=f"97.5th: ${upper:,.0f}",
+        annotation_position="top right",
+        annotation_font=dict(color="#58a6ff", size=10),
+    )
+    # Current price
+    fig.add_vline(
+        x=current_price, line_dash="solid", line_color="#F7931A", line_width=2,
+        annotation_text=f"Current: ${current_price:,.0f}",
+        annotation_position="top",
+        annotation_font=dict(color="#F7931A", size=10),
+    )
+
+    fig.update_layout(
+        template="plotly_dark",
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(13,17,23,0.95)",
+        xaxis=dict(
+            title="Simulated Price ($)",
+            gridcolor="#21262d",
+            tickprefix="$",
+            tickformat=",",
+        ),
+        yaxis=dict(title="Frequency", gridcolor="#21262d"),
+        height=350,
+        margin=dict(l=50, r=20, t=30, b=50),
+        font=dict(family="Inter, sans-serif", color="#e6edf3"),
+        showlegend=False,
+    )
+
+    return fig
+
+
+def build_rolling_coverage_chart(backtest_rows: list[dict]) -> go.Figure | None:
+    """Plots 50-bar rolling coverage from backtest data."""
+    if len(backtest_rows) < 60:
+        return None
+
+    hits = []
+    for r in backtest_rows:
+        actual = r.get("actual_close")
+        if actual is None:
+            hits.append(0)
+            continue
+        hit = 1 if r["lower_bound"] <= actual <= r["upper_bound"] else 0
+        hits.append(hit)
+
+    window = 50
+    rolling = pd.Series(hits).rolling(window).mean()
+
+    fig = go.Figure()
+
+    fig.add_trace(
+        go.Scatter(
+            x=list(range(len(rolling))),
+            y=rolling,
+            mode="lines",
+            line=dict(color="#3fb950", width=2),
+            name="Rolling Coverage",
+            fill="tozeroy",
+            fillcolor="rgba(63,185,80,0.08)",
+        )
+    )
+
+    # 95% target line
+    fig.add_hline(
+        y=0.95, line_dash="dash", line_color="#F7931A", line_width=1,
+        annotation_text="95% Target",
+        annotation_position="right",
+        annotation_font=dict(color="#F7931A", size=10),
+    )
+
+    fig.update_layout(
+        template="plotly_dark",
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(13,17,23,0.95)",
+        xaxis=dict(
+            title="Prediction #",
+            gridcolor="#21262d",
+        ),
+        yaxis=dict(
+            title="Coverage",
+            gridcolor="#21262d",
+            tickformat=".0%",
+            range=[0.75, 1.05],
+        ),
+        height=350,
+        margin=dict(l=50, r=20, t=30, b=50),
+        font=dict(family="Inter, sans-serif", color="#e6edf3"),
+        showlegend=False,
     )
 
     return fig
@@ -263,15 +392,28 @@ def main() -> None:
         unsafe_allow_html=True,
     )
     st.markdown(
-        '<div style="text-align:center;color:#6c7a89;font-size:1rem;margin-bottom:2rem;font-weight:400">'
+        '<div style="text-align:center;color:#6c7a89;font-size:1rem;margin-bottom:0.3rem;font-weight:400">'
         'GBM + GARCH(1,1) with Student-t innovations · 95% confidence interval · Live from Binance</div>',
+        unsafe_allow_html=True,
+    )
+
+    # Countdown to next hourly prediction
+    now_utc = datetime.now(timezone.utc)
+    next_hour = now_utc.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1)
+    remaining = next_hour - now_utc
+    mins_left = int(remaining.total_seconds()) // 60
+    updated_ago = now_utc.strftime("%H:%M UTC")
+
+    st.markdown(
+        f'<div style="text-align:center;color:#484f58;font-size:0.78rem;margin-bottom:1.8rem">'
+        f'Last updated: {updated_ago} · Next prediction in: ~{mins_left} min · Auto-refreshes every 5 min</div>',
         unsafe_allow_html=True,
     )
 
     data_provider, use_case, repo = get_dependencies()
 
     # ── Backtest Metrics ──
-    metrics = load_backtest_metrics()
+    metrics, backtest_rows = load_backtest_metrics()
     st.markdown(_section("Backtest Performance (30 Days)"), unsafe_allow_html=True)
 
     b1, b2, b3, b4 = st.columns(4)
@@ -289,7 +431,7 @@ def main() -> None:
 
     with st.spinner("Fetching live data from Binance & running Monte Carlo simulation …"):
         try:
-            prediction, candles = use_case.execute(lookback=500)
+            prediction, candles, sim_result = use_case.execute(lookback=500)
             current_price = candles[-1].close_price
             repo.save(prediction)
         except Exception as exc:
@@ -299,6 +441,7 @@ def main() -> None:
     price_change = candles[-1].close_price - candles[-2].close_price
     price_change_pct = (price_change / candles[-2].close_price) * 100
     change_arrow = "▲" if price_change >= 0 else "▼"
+    change_color = "green" if price_change >= 0 else "red"
     change_text = f"{change_arrow} ${abs(price_change):,.2f} ({price_change_pct:+.2f}%)"
 
     p1, p2, p3, p4 = st.columns(4)
@@ -311,7 +454,7 @@ def main() -> None:
     with p4:
         st.markdown(_kpi_html("Prediction Width", f"${prediction.width:,.2f}", "95% confidence band"), unsafe_allow_html=True)
 
-    # ── Chart ──
+    # ── Price Chart ──
     st.markdown(_section("Last 100 Hours + Forecast Ribbon"), unsafe_allow_html=True)
 
     display_candles = candles[-100:]
@@ -325,12 +468,84 @@ def main() -> None:
     st.plotly_chart(
         chart,
         use_container_width=True,
-        config={
-            "responsive": True,
-            "displayModeBar": False,
-            "scrollZoom": True
-        }
+        config={"responsive": True, "displayModeBar": False, "scrollZoom": True},
     )
+
+    # ── Monte Carlo Distribution + Model Parameters ──
+    dist_col, params_col = st.columns([3, 2])
+
+    with dist_col:
+        st.markdown(_section("Monte Carlo Price Distribution (10,000 paths)"), unsafe_allow_html=True)
+        dist_chart = build_distribution_chart(
+            sim_result.simulated_prices,
+            prediction.lower_bound,
+            prediction.upper_bound,
+            current_price,
+        )
+        st.plotly_chart(
+            dist_chart,
+            use_container_width=True,
+            config={"responsive": True, "displayModeBar": False},
+        )
+
+    with params_col:
+        st.markdown(_section("Fitted Model Parameters"), unsafe_allow_html=True)
+        regime_emoji = {"low": "🟢 Low", "normal": "🟡 Normal", "high": "🔴 High"}
+        method_label = "GARCH(1,1)" if sim_result.fitting_method == "garch" else "EWMA Fallback"
+        annualized_vol = sim_result.fitted_sigma * np.sqrt(8760) * 100
+
+        param_rows = [
+            ("Fitting Method", method_label),
+            ("Volatility Regime", regime_emoji.get(sim_result.volatility_regime, sim_result.volatility_regime)),
+            ("Hourly σ (sigma)", f"{sim_result.fitted_sigma * 100:.4f}%"),
+            ("Annualised Vol", f"{annualized_vol:.1f}%"),
+            ("Drift μ (mu)", f"{sim_result.fitted_mu * 100:.6f}%"),
+            ("Student-t ν (nu)", f"{sim_result.fitted_nu:.2f}"),
+            ("Sigma Multiplier", f"×{sim_result.sigma_multiplier:.2f}"),
+        ]
+
+        params_html = '<div style="' + _BG + ';border:1px solid #21262d;border-radius:16px;padding:1.2rem;border-top:3px solid #F7931A">'
+        for label, value in param_rows:
+            params_html += (
+                f'<div style="display:flex;justify-content:space-between;padding:0.45rem 0;border-bottom:1px solid #21262d">'
+                f'<span style="color:#7d8590;font-size:0.82rem">{label}</span>'
+                f'<span style="color:#e6edf3;font-weight:600;font-size:0.82rem">{value}</span>'
+                f'</div>'
+            )
+        params_html += '</div>'
+        st.markdown(params_html, unsafe_allow_html=True)
+
+    # ── Rolling Coverage Chart ──
+    if backtest_rows:
+        st.markdown(_section("Backtest Rolling Coverage (50-bar window)"), unsafe_allow_html=True)
+        rolling_chart = build_rolling_coverage_chart(backtest_rows)
+        if rolling_chart:
+            st.plotly_chart(
+                rolling_chart,
+                use_container_width=True,
+                config={"responsive": True, "displayModeBar": False},
+            )
+
+    # ── How It Works + Download ──
+    with st.expander("📐 How It Works"):
+        st.markdown("""
+**Geometric Brownian Motion (GBM)** models BTC's hourly log-returns as a stochastic process with drift and diffusion.
+
+1. **Volatility Estimation**: GARCH(1,1) captures volatility clustering — calm hours produce narrow ranges, volatile hours produce wider ones.
+2. **Fat Tails**: Student-t distributed innovations (not Gaussian) handle Bitcoin's frequent large moves. Degrees of freedom (ν) are fit via MLE, clamped to [3, 30].
+3. **Regime Detection**: Recent volatility is compared against historical baseline to classify the market as Low / Normal / High volatility. Each regime uses a different model-risk buffer.
+4. **10,000 Monte Carlo Paths**: Simulated prices are generated using `S(t+1) = S(t) × exp((μ - σ²/2)dt + σ√dt × Z)` where Z ~ t(ν) variance-normalised.
+5. **95% Interval**: The 2.5th and 97.5th percentiles of simulated prices form the prediction bounds.
+        """)
+
+    if os.path.exists("backtest_results.jsonl"):
+        with open("backtest_results.jsonl", "rb") as fh:
+            st.download_button(
+                "📥 Download Backtest Results (JSONL)",
+                data=fh,
+                file_name="backtest_results.jsonl",
+                mime="application/jsonl",
+            )
 
 
 if __name__ == "__main__":

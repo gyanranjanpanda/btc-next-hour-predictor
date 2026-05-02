@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import warnings
+from dataclasses import dataclass
 
 import numpy as np
 from scipy import stats as sp_stats
@@ -10,6 +11,26 @@ from .errors import SimulationError
 from .models import Candle, Prediction
 
 logger = logging.getLogger(__name__)
+
+_REGIME_MULTIPLIERS = {
+    "low": 1.01,
+    "normal": 1.03,
+    "high": 1.06,
+}
+
+
+@dataclass
+class SimulationResult:
+    """Simulation output with prediction and diagnostic metadata."""
+
+    prediction: Prediction
+    simulated_prices: np.ndarray
+    fitted_mu: float
+    fitted_sigma: float
+    fitted_nu: float
+    fitting_method: str
+    volatility_regime: str
+    sigma_multiplier: float
 
 
 class GBMSimulator:
@@ -39,21 +60,24 @@ class GBMSimulator:
 
     def _fit_volatility_and_df(
         self, log_returns: np.ndarray
-    ) -> tuple[float, float, float]:
+    ) -> tuple[float, float, float, str]:
         """
-        Returns (mu, sigma, nu) where:
+        Returns (mu, sigma, nu, method) where:
         - mu: mean log return (drift)
         - sigma: conditional volatility estimate for next period
         - nu: Student-t degrees of freedom (>= 3.0)
+        - method: "garch" or "ewma"
         """
         # GARCH needs at least ~50 observations to converge reliably
         if len(log_returns) >= 50:
             try:
-                return self._fit_with_garch(log_returns)
+                mu, sigma, nu = self._fit_with_garch(log_returns)
+                return mu, sigma, nu, "garch"
             except Exception:
                 logger.debug("GARCH fitting failed, using EWMA fallback")
 
-        return self._fit_with_ewma(log_returns)
+        mu, sigma, nu = self._fit_with_ewma(log_returns)
+        return mu, sigma, nu, "ewma"
 
     def _fit_with_garch(
         self, log_returns: np.ndarray
@@ -118,15 +142,38 @@ class GBMSimulator:
 
         return mu, sigma, nu
 
+    def _detect_volatility_regime(self, log_returns: np.ndarray) -> str:
+        """
+        Classify current volatility regime by comparing recent realized
+        volatility against the full-history baseline.
+        """
+        if len(log_returns) < self.volatility_lookback * 2:
+            return "normal"
+
+        recent_vol = np.std(log_returns[-self.volatility_lookback:], ddof=1)
+        baseline_vol = np.std(log_returns, ddof=1)
+
+        if baseline_vol <= 1e-10:
+            return "normal"
+
+        ratio = recent_vol / baseline_vol
+
+        if ratio < 0.7:
+            return "low"
+        elif ratio > 1.3:
+            return "high"
+        return "normal"
+
     def predict_next_candle(
         self,
         recent_candles: list[Candle],
-    ) -> Prediction:
+    ) -> SimulationResult:
         """
         Generates a 95% prediction interval for the next hourly close.
 
-        Uses all available history for fitting when possible, but caps the
-        volatility-fitting window to avoid diluting recent regime changes.
+        Uses regime-adaptive sigma scaling instead of a flat multiplier,
+        producing tighter intervals in calm markets and wider ones during
+        high-volatility regimes.
         """
         min_required = self.volatility_lookback + 1
         if len(recent_candles) < min_required:
@@ -140,7 +187,7 @@ class GBMSimulator:
         # Feed the entire available return series to GARCH for better fitting,
         # but cap at 500 to avoid diluting with ancient regime data.
         fitting_returns = log_returns[-500:]
-        mu, sigma, nu = self._fit_volatility_and_df(fitting_returns)
+        mu, sigma, nu, fitting_method = self._fit_volatility_and_df(fitting_returns)
 
         # Safety floor: if sigma is degenerate, fall back to simple std
         if sigma <= 1e-10:
@@ -148,10 +195,13 @@ class GBMSimulator:
         if sigma <= 1e-10:
             sigma = 1e-6
 
-        # Model-risk buffer: GARCH point-estimates systematically under-cover
-        # by ~0.5–1% due to parameter uncertainty. A small multiplier corrects
-        # this without meaningfully widening the average range.
-        sigma *= 1.05
+        raw_sigma = sigma
+
+        # Regime-adaptive model-risk buffer instead of flat 1.05 multiplier.
+        # Calm markets get minimal inflation; volatile markets get more.
+        regime = self._detect_volatility_regime(fitting_returns)
+        multiplier = _REGIME_MULTIPLIERS[regime]
+        sigma *= multiplier
 
         current_price = closes[-1]
         dt = 1.0
@@ -169,9 +219,20 @@ class GBMSimulator:
         lower = float(np.percentile(simulated_prices, 2.5))
         upper = float(np.percentile(simulated_prices, 97.5))
 
-        return Prediction(
+        prediction = Prediction(
             timestamp=recent_candles[-1].timestamp,
             lower_bound=lower,
             upper_bound=upper,
             confidence_interval=0.95,
+        )
+
+        return SimulationResult(
+            prediction=prediction,
+            simulated_prices=simulated_prices,
+            fitted_mu=mu,
+            fitted_sigma=raw_sigma,
+            fitted_nu=nu,
+            fitting_method=fitting_method,
+            volatility_regime=regime,
+            sigma_multiplier=multiplier,
         )

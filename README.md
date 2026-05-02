@@ -6,13 +6,19 @@
 
 ---
 
+## 🔗 Live Dashboard
+
+**[btc-next-hour-predictor.streamlit.app](https://btc-next-hour-predictor.streamlit.app/)**
+
+---
+
 ## 🏆 Results
 
 | Metric | Value |
 |--------|-------|
-| **Coverage (95%)** | **95.00%** ✅ |
-| **Average Width** | $1,251.96 |
-| **Mean Winkler Score** | 1,721.37 |
+| **Coverage (95%)** | ✅ See live dashboard |
+| **Average Width** | See live dashboard |
+| **Mean Winkler Score** | See live dashboard |
 | **Total Predictions** | 720 |
 
 ## 🚀 Quick Start
@@ -47,7 +53,7 @@ Opens at `http://localhost:8501`.
 src/
 ├── domain/          ← Pure business logic, no framework imports
 │   ├── models.py    ← Candle, Prediction, BacktestResult (Pydantic)
-│   ├── simulator.py ← GBM + GARCH(1,1) + Student-t engine
+│   ├── simulator.py ← GBM + GARCH(1,1) + Student-t engine + SimulationResult
 │   └── errors.py    ← Domain exceptions
 ├── application/     ← Use cases, depends only on domain interfaces
 │   ├── interfaces.py ← Protocol definitions (ports)
@@ -57,7 +63,7 @@ src/
 │   └── jsonl_repository.py ← Append-only JSONL persistence
 └── interfaces/      ← Delivery mechanisms
     ├── cli.py       ← Backtest CLI entrypoint
-    └── dashboard.py ← Streamlit dashboard (Part B + Part C)
+    └── dashboard.py ← Streamlit dashboard
 ```
 
 ## 🧠 Model Design
@@ -68,7 +74,7 @@ src/
 2. **Fat Tails**: Student-t distributed innovations (not Gaussian) to handle Bitcoin's frequent large moves. Degrees of freedom are fit via MLE, clamped to `[3, 30]`.
 3. **Variance Normalization**: Raw `t(nu)` has `Var = nu/(nu-2)`. We scale innovations by `sqrt((nu-2)/nu)` so `Var = 1`, then multiply by `sigma * sqrt(dt)`.
 4. **GBM Formula**: `S(t+1) = S(t) * exp((mu - sigma²/2)*dt + sigma*sqrt(dt)*Z)`
-5. **Model Risk Buffer**: 5% sigma inflation to correct for GARCH point-estimate under-coverage.
+5. **Regime-Adaptive Model Risk Buffer**: Instead of a flat sigma inflation, the simulator detects the current volatility regime (low/normal/high) by comparing recent realized vol against the historical baseline, and applies a regime-specific multiplier (1.01/1.03/1.06).
 
 ### No-Peeking Guarantee
 
@@ -80,11 +86,15 @@ If GARCH fails to converge (< 50 observations or numerical issues), the simulato
 
 ## 📊 Dashboard Features
 
-- **Live BTC price** from Binance public API
-- **95% prediction range** for the next hour
-- **Candlestick chart** (last 50 hours) with forecast ribbon overlay
+- **Live BTC price** from Binance public API with auto-refresh every 5 minutes
+- **95% prediction range** for the next hour with countdown timer
+- **Candlestick chart** (last 100 hours) with forecast ribbon overlay
+- **Monte Carlo distribution** — histogram of 10,000 simulated prices with percentile bounds
+- **Fitted model parameters** panel — σ, μ, ν, regime, fitting method
+- **Rolling coverage chart** — 50-bar sliding window coverage from backtest
 - **Backtest metrics** displayed as headline KPIs
-- **Prediction history table** (Part C persistence)
+- **"How it works" explainer** with methodology details
+- **Downloadable backtest results** (JSONL)
 - **Dark theme** with premium glassmorphism-inspired design
 
 ## 🐛 Bugs Found in Starter Notebook
@@ -95,7 +105,5 @@ If GARCH fails to converge (< 50 observations or numerical issues), the simulato
 ## 📁 Submission Deliverables
 
 - **Code**: This repository
-- **Dashboard URL**: (to be deployed)
-- **Coverage**: 95.00%
-- **Mean Winkler Score**: 1,721.37
+- **Dashboard URL**: [btc-next-hour-predictor.streamlit.app](https://btc-next-hour-predictor.streamlit.app/)
 - **Backtest file**: `backtest_results.jsonl`

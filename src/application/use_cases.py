@@ -4,7 +4,7 @@ import logging
 from datetime import timedelta
 
 from ..domain.models import BacktestResult, Candle, Prediction
-from ..domain.simulator import GBMSimulator
+from ..domain.simulator import GBMSimulator, SimulationResult
 from .interfaces import IMarketDataProvider
 
 logger = logging.getLogger(__name__)
@@ -19,24 +19,23 @@ class PredictNextHourUseCase:
         self.data_provider = data_provider
         self.simulator = simulator
 
-    def execute(self, lookback: int = 500) -> tuple[Prediction, list[Candle]]:
+    def execute(self, lookback: int = 500) -> tuple[Prediction, list[Candle], SimulationResult]:
         """
-        Returns the prediction for the next hour and the candles used.
-        The candle list is returned so the dashboard can render the chart
-        without a second API call.
+        Returns the prediction for the next hour, the candles used,
+        and the full simulation result (for dashboard diagnostics).
         """
         candles = self.data_provider.fetch_historical_klines(limit=lookback)
 
-        raw_pred = self.simulator.predict_next_candle(candles)
+        sim_result = self.simulator.predict_next_candle(candles)
         next_hour = candles[-1].timestamp + timedelta(hours=1)
 
         prediction = Prediction(
             timestamp=next_hour,
-            lower_bound=raw_pred.lower_bound,
-            upper_bound=raw_pred.upper_bound,
-            confidence_interval=raw_pred.confidence_interval,
+            lower_bound=sim_result.prediction.lower_bound,
+            upper_bound=sim_result.prediction.upper_bound,
+            confidence_interval=sim_result.prediction.confidence_interval,
         )
-        return prediction, candles
+        return prediction, candles, sim_result
 
 
 class RunBacktestUseCase:
@@ -72,13 +71,13 @@ class RunBacktestUseCase:
             history = candles[: step]  # Everything before the target bar
             target_candle = candles[step]
 
-            raw_pred = self.simulator.predict_next_candle(history)
+            sim_result = self.simulator.predict_next_candle(history)
 
             prediction = Prediction(
                 timestamp=target_candle.timestamp,
-                lower_bound=raw_pred.lower_bound,
-                upper_bound=raw_pred.upper_bound,
-                confidence_interval=raw_pred.confidence_interval,
+                lower_bound=sim_result.prediction.lower_bound,
+                upper_bound=sim_result.prediction.upper_bound,
+                confidence_interval=sim_result.prediction.confidence_interval,
                 actual_close=target_candle.close_price,
             )
             predictions.append(prediction)
