@@ -212,6 +212,7 @@ def build_chart(
         template="plotly_dark",
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(13,17,23,0.95)",
+        autosize=True,
         xaxis=dict(
             rangeslider=dict(visible=False),
             gridcolor="#21262d",
@@ -221,6 +222,7 @@ def build_chart(
             spikethickness=1,
             spikedash="dot",
             spikemode="across",
+            autorange=True,
         ),
         yaxis=dict(
             gridcolor="#21262d",
@@ -231,16 +233,18 @@ def build_chart(
             spikecolor="#F7931A",
             spikethickness=1,
             spikedash="dot",
+            autorange=True,
+            fixedrange=False,
         ),
         height=650,
-        margin=dict(l=60, r=20, t=30, b=40),
+        margin=dict(l=50, r=20, t=40, b=40),
         legend=dict(
             orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1,
             font=dict(color="#7d8590", size=11), bgcolor="rgba(0,0,0,0)",
         ),
         font=dict(family="Inter, sans-serif", color="#e6edf3"),
         hovermode="x unified",
-        dragmode="zoom",
+        dragmode="pan",
     )
 
     return fig
@@ -318,32 +322,14 @@ def main() -> None:
 
     past_preds = repo.get_all()[-50:]
     chart = build_chart(candles_df, prediction.lower_bound, prediction.upper_bound, prediction.timestamp, past_predictions=past_preds)
-    st.plotly_chart(chart, use_container_width=True)
-
-    # ── Prediction History Table (Part C) ──
-    all_preds = repo.get_all()
-    if len(all_preds) > 1:
-        st.markdown(_section("Prediction History"), unsafe_allow_html=True)
-        history_df = pd.DataFrame([
-            {
-                "Timestamp": p.timestamp.strftime("%Y-%m-%d %H:%M UTC"),
-                "Lower Bound": f"${p.lower_bound:,.2f}",
-                "Upper Bound": f"${p.upper_bound:,.2f}",
-                "Width": f"${p.width:,.2f}",
-                "Actual": f"${p.actual_close:,.2f}" if p.actual_close else "—",
-                "Hit": "✅" if p.contains_actual else ("❌" if p.actual_close else "⏳"),
-            }
-            for p in reversed(all_preds[-20:])
-        ])
-        st.dataframe(history_df, use_container_width=True, hide_index=True)
-
-    # Footer
-    st.markdown(
-        '<div style="text-align:center;color:#484f58;font-size:0.75rem;margin-top:2rem;padding:1rem">'
-        'Built for the <a href="#" style="color:#F7931A;text-decoration:none">AlphaI × Polaris Build Challenge</a> · '
-        'GBM simulator with GARCH(1,1) volatility + Student-t fat tails · '
-        'Data from Binance Public API</div>',
-        unsafe_allow_html=True,
+    st.plotly_chart(
+        chart,
+        use_container_width=True,
+        config={
+            "responsive": True,
+            "displayModeBar": False,
+            "scrollZoom": True
+        }
     )
 
 
